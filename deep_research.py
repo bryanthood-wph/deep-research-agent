@@ -20,4 +20,3 @@ with gr.Blocks(theme=gr.themes.Default(primary_hue="sky")) as ui:
     query_textbox.submit(fn=run, inputs=query_textbox, outputs=report)
 
 ui.launch(inbrowser=True)
-
