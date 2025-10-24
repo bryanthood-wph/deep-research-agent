@@ -1,0 +1,9 @@
+[tool.mypy]
+# Allow imports from libraries without type stubs
+ignore_missing_imports = true
+
+# Or alternatively, be more specific:
+# [[tool.mypy.overrides]]
+# module = ["sendgrid.*"]
+# ignore_missing_imports = true
+
