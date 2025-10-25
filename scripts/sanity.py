@@ -1,0 +1,18 @@
+import sys, importlib.util, os
+def die(msg): print("ENV ERROR:", msg, file=sys.stderr); raise SystemExit(1)
+if sys.version_info < (3, 10): die(f"Python {sys.version.split()[0]} < 3.10")
+if "conda" in sys.version.lower(): die("Conda interpreter detected; use project .venv")
+try:
+    import pydantic
+    if int(pydantic.__version__.split(".")[0]) < 2:
+        die(f"Pydantic {pydantic.__version__} < 2.x")
+except Exception as e:
+    die(f"Pydantic import failed: {e}")
+spec = importlib.util.find_spec("agents")
+if spec and "site-packages" in (spec.origin or ""):
+    # heuristic for the TF/Gym fossil
+    try:
+        import importlib; importlib.import_module("agents.scripts.networks"); die("Legacy 'agents' package detected")
+    except Exception: pass
+print("SANITY OK:", sys.version.split()[0])
+
