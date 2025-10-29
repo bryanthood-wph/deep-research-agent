@@ -4,14 +4,23 @@ from typing import Dict
 import sendgrid
 from sendgrid.helpers.mail import Email, Mail, Content, To
 from agents import Agent, function_tool, ModelSettings
+import markdown
 
 
 def send_email_direct(subject: str, html_body: str) -> Dict[str, str]:
     """Send an email with the given subject and HTML body (direct call version)"""
+    # Convert Markdown to HTML before sending
+    # Note: html_body comes as Markdown from the orchestrator (report.markdown_report)
+    # We need to convert # headings, [links](url), **bold**, etc. to proper HTML
+    html_content = markdown.markdown(
+        html_body,
+        extensions=['extra', 'nl2br']  # 'extra' handles tables/fenced code, 'nl2br' converts newlines
+    )
+    
     sg = sendgrid.SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
     from_email = Email("colby@colbyhoodconsulting.com")  # put your verified sender here
     to_email = To("brnthood@gmail.com")  # put your recipient here
-    content = Content("text/html", html_body)
+    content = Content("text/html", html_content)  # Now it's real HTML, not Markdown
     mail = Mail(from_email, to_email, subject, content).get()
     response = sg.client.mail.send.post(request_body=mail)
     print("Email response", response.status_code)

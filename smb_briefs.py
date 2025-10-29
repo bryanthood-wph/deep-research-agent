@@ -91,7 +91,7 @@ async def generate_brief(query: str, template: str, biz: str, location: str, ema
         # 5. Optionally email
         if email:
             subject = f"{template} Brief: {biz} – {location}"
-            html_body = report.markdown_report.replace("\n", "<br>")
-            send_email_direct(subject, html_body)
+            # Pass markdown directly; email_agent will convert to HTML
+            send_email_direct(subject, report.markdown_report)
 
         return report
