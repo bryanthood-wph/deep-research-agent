@@ -1,13 +1,16 @@
 from pydantic import BaseModel, Field
-from agents import Agent
+from agents import Agent, ModelSettings
 
 INSTRUCTIONS = (
     "You are a senior researcher tasked with writing a cohesive report for a research query. "
-    "You will be provided with the original query, and some initial research done by a research assistant.\n"
-    "You should first come up with an outline for the report that describes the structure and "
-    "flow of the report. Then, generate the report and return that as your final output.\n"
-    "The final output should be in markdown format, and it should be lengthy and detailed. Aim "
-    "for 5-10 pages of content, at least 1000 words."
+    "You will be provided with the original query and compact search findings.\n"
+    "Produce a concise brief in markdown.\n"
+    "Length: 1–3 pages, between 250 and 500 words total.\n"
+    "Structure:\n"
+    "- Executive summary: 4–6 bullets (terse).\n"
+    "- Main findings: 6–10 bullets with short evidence (root domains only).\n"
+    "- Top 5 recommended actions (one line each).\n"
+    "Constraints: stay within 250–500 words; avoid tables; avoid fluff; be precise."
 )
 
 
@@ -28,4 +31,5 @@ writer_agent = Agent(
     instructions=INSTRUCTIONS,
     model="gpt-4o-mini",
     output_type=ReportData,
+    model_settings=ModelSettings(max_output_tokens=900, temperature=0.3),
 )
