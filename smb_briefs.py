@@ -8,6 +8,7 @@ load_dotenv()
 
 import asyncio
 import logging
+from typing import Optional
 from agents import Runner, trace, gen_trace_id
 from planner_agent import planner_agent, WebSearchPlan, WebSearchItem
 from search_agent import search_agent
@@ -56,7 +57,7 @@ def check_token_usage(agent_name: str, result, cap: int):
 
 async def _search_all(plan: WebSearchPlan) -> list[str]:
     """Run all searches concurrently and return text results."""
-    async def one(item: WebSearchItem) -> str | None:
+    async def one(item: WebSearchItem) -> Optional[str]:
         try:
             r = await Runner.run(search_agent, f"Search term: {item.query}\nReason: {item.reason}")
             check_token_usage("Search agent", r, TOKEN_CAPS["Search agent"])
