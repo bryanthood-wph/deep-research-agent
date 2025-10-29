@@ -34,7 +34,9 @@ def main():
 
         go.click(fn=_sync_run, inputs=[query, template, biz, location, email], outputs=output)
 
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    # Auto-find available port; use 0.0.0.0 for HF Spaces compatibility
+    # Gradio auto-detects HF environment and adjusts accordingly
+    demo.launch(server_name="0.0.0.0", server_port=None)
 
 if __name__ == "__main__":
     main()
