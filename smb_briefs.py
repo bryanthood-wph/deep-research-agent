@@ -9,11 +9,11 @@ load_dotenv()
 import asyncio
 import logging
 from typing import Optional
-from agents import Runner, trace, gen_trace_id
+from agents import Runner
 from planner_agent import planner_agent, WebSearchPlan, WebSearchItem
 from search_agent import search_agent
 from writer_agent import writer_agent, ReportData
-from email_agent import send_email_direct
+from email_agent import send_email_direct, mask_email
 from brief_templates import writer_instructions
 
 # Configure logging for token monitoring
@@ -68,31 +68,28 @@ async def _search_all(plan: WebSearchPlan) -> list[str]:
     tasks = [asyncio.create_task(one(s)) for s in plan.searches]
     return [r for r in await asyncio.gather(*tasks) if r]
 
-async def generate_brief(query: str, template: str, biz: str, location: str, email: bool = False) -> ReportData:
+async def generate_brief(query: str, template: str, biz: str, location: str, to_email: str = None) -> ReportData:
     """Full brief generation pipeline."""
-    tid = gen_trace_id()
-    with trace("SMB Brief", trace_id=tid):
-        # 1. Build the research plan
-        plan_result = await Runner.run(planner_agent, f"Query: {query}")
-        check_token_usage("PlannerAgent", plan_result, TOKEN_CAPS["PlannerAgent"])
-        plan = plan_result.final_output_as(WebSearchPlan)
+    # 1. Build the research plan
+    plan_result = await Runner.run(planner_agent, f"Query: {query}")
+    check_token_usage("PlannerAgent", plan_result, TOKEN_CAPS["PlannerAgent"])
+    plan = plan_result.final_output_as(WebSearchPlan)
 
-        # 2. Perform searches concurrently
-        search_results = await _search_all(plan)
+    # 2. Perform searches concurrently
+    search_results = await _search_all(plan)
 
-        # 3. Compose writer prompt
-        instructions = writer_instructions(template, biz, location)
-        writer_prompt = f"Original query: {query}\nSummarized search results: {search_results}"
+    # 3. Compose writer prompt
+    instructions = writer_instructions(template, biz, location)
+    writer_prompt = f"Original query: {query}\nSummarized search results: {search_results}"
 
-        # 4. Generate report
-        writer_result = await Runner.run(writer_agent, f"{instructions}\n\n{writer_prompt}")
-        check_token_usage("WriterAgent", writer_result, TOKEN_CAPS["WriterAgent"])
-        report = writer_result.final_output_as(ReportData)
+    # 4. Generate report
+    writer_result = await Runner.run(writer_agent, f"{instructions}\n\n{writer_prompt}")
+    check_token_usage("WriterAgent", writer_result, TOKEN_CAPS["WriterAgent"])
+    report = writer_result.final_output_as(ReportData)
 
-        # 5. Optionally email
-        if email:
-            subject = f"{template} Brief: {biz} – {location}"
-            # Pass markdown directly; email_agent will convert to HTML
-            send_email_direct(subject, report.markdown_report)
+    # 5. Send email if address provided
+    if to_email:
+        subject = f"{template} Brief: {biz} – {location}"
+        send_email_direct(subject, report.markdown_report, to_email)
 
-        return report
+    return report

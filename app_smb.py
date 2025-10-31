@@ -7,18 +7,29 @@ load_dotenv()
 
 import gradio as gr
 import asyncio
+import re
 from smb_briefs import generate_brief
 from brief_templates import TEMPLATES
+from email_agent import mask_email
 
-async def run_brief(query, template, biz, location, email):
-    report = await generate_brief(query, template, biz, location, email)
-    return report.markdown_report
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
+async def run_brief(query, template, biz, location, to_email):
+    # Validate email
+    if not to_email or not EMAIL_RE.match(to_email.strip()):
+        return "⚠️ Enter a valid email to receive the brief."
+    
+    # Generate report and send via email
+    report = await generate_brief(query, template, biz, location, to_email.strip())
+    
+    # Return status only, never the report body
+    return f"✅ Email sent to **{mask_email(to_email.strip())}**"
 
 def _sync_run(q, t, b, l, e):
     try:
         return asyncio.run(run_brief(q, t, b, l, e))
     except Exception as ex:
-        return f"### ⚠️ Could not generate brief\n```\n{ex}\n```\nCheck API key / quota and try again."
+        return f"⚠️ Could not generate brief: {str(ex)}"
 
 def main():
     with gr.Blocks(title="SMB Decision Brief Generator") as demo:
@@ -27,12 +38,21 @@ def main():
             template = gr.Dropdown(list(TEMPLATES.keys()), label="Brief Type", value="Competitor Snapshot")
             biz = gr.Textbox(label="Business Name", placeholder="Acme Plumbing")
             location = gr.Textbox(label="Location", placeholder="Austin, TX")
-        query = gr.Textbox(label="Research Query", placeholder="Market trends for local plumbers", lines=2)
-        email = gr.Checkbox(label="Email report when done", value=False)
+        query = gr.Textbox(
+            label="Describe the outcome for this brief",
+            placeholder='e.g., "Top 5 bankruptcy competitors in Johnson City; pricing, offers, differentiators; 14-day actions."',
+            lines=2
+        )
+        to_email = gr.Textbox(
+            label="Where should we email it?",
+            placeholder="you@company.com",
+            lines=1
+        )
+        gr.Markdown("**Delivery:** Email")
         go = gr.Button("Generate Brief 🚀", variant="primary")
-        output = gr.Markdown(label="Generated Brief")
+        status = gr.Markdown(label="Status")
 
-        go.click(fn=_sync_run, inputs=[query, template, biz, location, email], outputs=output)
+        go.click(fn=_sync_run, inputs=[query, template, biz, location, to_email], outputs=status)
 
     # Auto-find available port; use 0.0.0.0 for HF Spaces compatibility
     # Gradio auto-detects HF environment and adjusts accordingly
