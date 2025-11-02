@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m gradio app_smb.py --server-name 0.0.0.0 --server-port $PORT
+    startCommand: python app_smb.py
     autoDeploy: true
     envVars:
       - key: OPENAI_API_KEY

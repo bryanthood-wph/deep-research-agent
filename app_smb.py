@@ -90,8 +90,10 @@ demo = create_demo()
 
 def main():
     """Launch the demo (for direct execution)."""
-    # Auto-find available port; use 0.0.0.0 for Render/HF Spaces compatibility
-    demo.launch(server_name="0.0.0.0", server_port=None)
+    # Read port from environment (Render sets $PORT)
+    port = int(os.environ.get("PORT", 7860))
+    # Use 0.0.0.0 for Render/HF Spaces compatibility
+    demo.launch(server_name="0.0.0.0", server_port=port)
 
 if __name__ == "__main__":
     main()
