@@ -31,7 +31,8 @@ def _sync_run(q, t, b, l, e):
     except Exception as ex:
         return f"⚠️ Could not generate brief: {str(ex)}"
 
-def main():
+def create_demo():
+    """Create and return the Gradio demo (works with CLI mode)."""
     with gr.Blocks(title="SMB Decision Brief Generator") as demo:
         gr.Markdown("# 🧠 SMB Decision Briefs\nGenerate concise research-based reports for small businesses.")
         with gr.Row():
@@ -54,8 +55,14 @@ def main():
 
         go.click(fn=_sync_run, inputs=[query, template, biz, location, to_email], outputs=status)
 
-    # Auto-find available port; use 0.0.0.0 for HF Spaces compatibility
-    # Gradio auto-detects HF environment and adjusts accordingly
+    return demo
+
+# Create demo at module level for Gradio CLI compatibility
+demo = create_demo()
+
+def main():
+    """Launch the demo (for direct execution)."""
+    # Auto-find available port; use 0.0.0.0 for Render/HF Spaces compatibility
     demo.launch(server_name="0.0.0.0", server_port=None)
 
 if __name__ == "__main__":

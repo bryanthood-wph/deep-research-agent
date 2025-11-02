@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: deep-research-agent
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m gradio app_smb.py --server-name 0.0.0.0 --server-port $PORT
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+
