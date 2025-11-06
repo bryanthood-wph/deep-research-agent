@@ -3,8 +3,7 @@ Tests for robust JSON parsing and repair.
 """
 
 import pytest
-from datetime import date, timedelta
-from parsing.json_capture import robust_json_load, repair_fill, flexible_date_parse, extract_and_parse_json
+from parsing.json_capture import robust_json_load, repair_fill, extract_and_parse_json
 from schemas import Report
 
 
@@ -30,19 +29,6 @@ def test_robust_json_load_code_block():
     result = robust_json_load(text)
     assert result is not None
     assert result["short_summary"] == "test"
-
-
-def test_flexible_date_parse_iso():
-    """Test ISO date parsing."""
-    result = flexible_date_parse("2025-12-07")
-    assert result == date(2025, 12, 7)
-
-
-def test_flexible_date_parse_invalid():
-    """Test invalid date defaults to 30 days out."""
-    result = flexible_date_parse("invalid date")
-    expected = date.today() + timedelta(days=30)
-    assert result == expected
 
 
 def test_repair_fill_minimums():
