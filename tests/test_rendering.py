@@ -27,10 +27,10 @@ def test_markdown_renderer_action_format():
     report = _create_test_report()
     markdown = render_report_to_markdown(report)
     
-    # Check action format includes KPI, target, how steps, tool
+    # Check action format includes KPI, target, how steps, tools
     assert "KPI:" in markdown
     assert "HOW:" in markdown
-    assert "TOOL:" in markdown
+    assert "TOOLS:" in markdown
     assert "Effort:" in markdown
     assert "Impact:" in markdown
 
