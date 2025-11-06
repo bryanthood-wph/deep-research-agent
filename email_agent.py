@@ -110,15 +110,7 @@ EMAIL_TEMPLATE = """<!doctype html>
             </td>
           </tr>
 
-          <!-- Sources -->
-          <tr>
-            <td style="padding:16px 0 8px;">
-              <h2 style="font-size:18px;line-height:1.3;margin:0 0 8px;color:{text};">Sources</h2>
-              <ul style="margin:0;padding-left:18px;">
-                {sources_html}
-              </ul>
-            </td>
-          </tr>
+          
 
           <!-- Footer -->
           <tr>
@@ -193,34 +185,43 @@ def _fmt_action_head(raw: str, is_first: bool = False, is_quick_win: bool = Fals
     return head_html
 
 def _grab(raw: str, pat: str):
-    m = re.search(pat + r'\s*:\s*([^;|\]\)]+)', raw, flags=re.I)
+    """Extract value after pattern. Special handling for KPI to stop before 'Target:' keyword."""
+    if pat == 'KPI':
+        # Stop KPI extraction before "Target:" to avoid capturing "website traffic Target"
+        m = re.search(r'KPI\s*:\s*([^;|\]\)]+?)(?=\s+Target:)', raw, flags=re.I)
+    else:
+        m = re.search(pat + r'\s*:\s*([^;|\]\)]+)', raw, flags=re.I)
     return m.group(1).strip() if m else None
 
 def _fmt_action_meta(raw: str) -> str:
-    """Format metrics with plain language labels."""
+    """Format SMART goal and Effort/Impact.
+    Parses Target: +X% in Y days format and removes baseline/source references.
+    """
     kpi    = _grab(raw, r'KPI')
-    target = _grab(raw, r'Target')
-    base   = _grab(raw, r'(?:Baseline|B)')
-    src    = _grab(raw, r'(?:Source|Src)')
     effort = _grab(raw, r'Effort')
     impact = _grab(raw, r'Impact')
-    season = None
-    m = re.search(r'\[Season(?:ality)?:\s*([^\]]+)\]', raw, flags=re.I)
-    if m: season = m.group(1).strip()
     
-    # Plain language labels
-    result_parts = []
-    tracking_parts = []
+    # Parse target_percent and target_days from "Target: +X% in Y days" or "within Y days"
+    target_percent = None
+    target_days = None
+    # Handle "in X days" or "within X days" variants
+    target_match = re.search(r'Target:\s*([+\-]?\d+%|complete)\s+(?:in|within)\s+(\d+)\s+days?', raw, flags=re.I)
+    if target_match:
+        target_percent = target_match.group(1).strip()
+        target_days = target_match.group(2).strip()
+    else:
+        # Fallback: try to extract just the percentage if format is different
+        target_match = re.search(r'Target:\s*([+\-]?\d+%)', raw, flags=re.I)
+        if target_match:
+            target_percent = target_match.group(1).strip()
+            target_days = "30"  # Default
     
-    if kpi:    result_parts.append(f"Goal: {html.escape(kpi)}")
-    if target: result_parts.append(f"Aim for: {html.escape(target)}")
-    if base:   result_parts.append(f"Currently: {html.escape(base)}")
-    if src:    tracking_parts.append(f"Track with: {html.escape(src)}")
-    
-    # Build result & tracking line
-    result_line = " | ".join(result_parts) if result_parts else ""
-    if tracking_parts:
-        result_line = (result_line + " | " + " | ".join(tracking_parts)) if result_line else " | ".join(tracking_parts)
+    # SMART goal synthesis (concise)
+    smart_goal = None
+    if kpi and target_percent and target_days:
+        smart_goal = f"SMART Goal: {html.escape(kpi)} — {html.escape(target_percent)} in {html.escape(target_days)} days"
+    elif kpi:
+        smart_goal = f"SMART Goal: {html.escape(kpi)}"
     
     # Effort/Impact on separate line
     effort_impact = []
@@ -228,18 +229,39 @@ def _fmt_action_meta(raw: str) -> str:
     if impact: effort_impact.append(f"Impact: {html.escape(impact)}")
     
     html_parts = []
-    if result_line:
-        html_parts.append(f"<div style='margin:8px 0 4px 0;color:#6b7280;font-size:13px;line-height:1.4;'>{result_line}</div>")
+    if smart_goal:
+        html_parts.append(f"<div style='margin:8px 0 4px 0;color:#111827;font-size:14px;line-height:1.4;'>{smart_goal}</div>")
     if effort_impact:
         html_parts.append(f"<div style='margin:4px 0 0 0;color:#6b7280;font-size:13px;'>{' • '.join(effort_impact)}</div>")
     
     return "".join(html_parts)
 
 def _fmt_action_how_and_tool(raw: str) -> str:
-    """Format HOW steps and Tool into separate, clearly labeled blocks."""
-    parts = re.split(r'\|\s*TOOL\s*:\s*', raw, flags=re.I)
-    left  = parts[0]
-    tool  = parts[1].strip() if len(parts) > 1 else None
+    """Format HOW steps and Tools into separate, clearly labeled blocks.
+    Supports both TOOL: <one> and TOOLS: 1) a 2) b 3) c formats.
+    """
+    # Split on TOOL or TOOLS
+    m_tools = re.split(r'\|\s*TOOLS?\s*:\s*', raw, flags=re.I)
+    left = m_tools[0]
+    tools_text = m_tools[1].strip() if len(m_tools) > 1 else None
+    tools: list[str] = []
+    if tools_text:
+        # Try to parse enumerated list "1) X 2) Y 3) Z" or comma/pipe separated
+        enum_parts = re.split(r'\s*\d+\)\s*', tools_text)
+        candidates = [p.strip() for p in enum_parts if p.strip()]
+        if not candidates:
+            candidates = [p.strip() for p in re.split(r',|\|', tools_text) if p.strip()]
+        tools = candidates[:3]
+    else:
+        # Back-compat: look for single TOOL:
+        parts_tool = re.split(r'\|\s*TOOL\s*:\s*', raw, flags=re.I)
+        if len(parts_tool) > 1:
+            t = parts_tool[1].strip()
+            if t:
+                tools = [t]
+    # Pad to three entries with N/A if needed
+    while len(tools) < 3:
+        tools.append("N/A (no dominant local tool identified)")
     m = re.search(r'(?:→\s*)?HOW\s*:\s*(.+)$', left, flags=re.I)
     how   = m.group(1).strip() if m else ""
     steps = [s.strip() for s in re.split(r'(?:(?:^|\s)\d+\)\s*|;|\s\|\s)', how) if s.strip()]
@@ -256,21 +278,17 @@ def _fmt_action_how_and_tool(raw: str) -> str:
             f"</div>"
         )
     
-    # Why it matters block
-    why_text = _get_why_it_matters(raw)
-    html_parts.append(
-        f"<div style='margin:8px 0;'>"
-        f"<span style='font-weight:600;color:#111827;font-size:14px;'>Why it matters:</span> "
-        f"<span style='color:#374151;font-size:14px;line-height:1.5;'>{html.escape(why_text)}</span>"
-        f"</div>"
-    )
+    # Why it matters block removed per user feedback
     
-    # Tool block
-    if tool:
+    # Tools block
+    if tools:
+        tool_items = " ".join(
+            [f"{idx+1}) {html.escape(tool)}" for idx, tool in enumerate(tools[:3])]
+        )
         html_parts.append(
             f"<div style='margin:8px 0 0 0;'>"
-            f"<span style='font-weight:600;color:#111827;font-size:14px;'>Tool:</span> "
-            f"<span style='color:{BRAND['accent']};font-weight:600;font-size:14px;'>{html.escape(tool)}</span>"
+            f"<span style='font-weight:600;color:#111827;font-size:14px;'>Tools:</span> "
+            f"<span style='color:{BRAND['accent']};font-weight:600;font-size:14px;'>{tool_items}</span>"
             f"</div>"
         )
     
@@ -318,6 +336,8 @@ def _section(md: str, title: str) -> str:
         variations.extend(["Executive summary", "Summary", "Overview"])
     elif title == "Main Findings":
         variations.extend(["Findings", "Key Findings", "Main findings"])
+    elif title == "Dogs Not Barking":
+        variations.extend(["Dogs not barking", "Market Gaps", "Market gaps", "Gaps", "Unmet Opportunities"])
     elif title == "Sources":
         variations.extend(["References", "Links", "Source Links"])
     
@@ -626,35 +646,21 @@ def _is_gap_line(text: str) -> bool:
     return bool(is_gap and len(line_clean) > 20)
 
 def _extract_market_gaps(md: str, location: str = "") -> list[str]:
-    """Extract 3 market gaps (Dogs Not Barking) from findings."""
-    findings_section = _section(md, "Main Findings")
-    if not findings_section:
-        all_bullets = [ln.strip() for ln in md.splitlines() if ln.strip().startswith(('-', '•'))]
-        findings_section = "\n".join(all_bullets[:15])
+    """Extract market gaps from Dogs Not Barking section (generated by LLM from research data)."""
+    # Extract from Dogs Not Barking section only (LLM generates this based on research)
+    gaps_section = _section(md, "Dogs Not Barking")
     
     gaps = []
-
-    if findings_section:
-        for line in findings_section.splitlines():
+    if gaps_section:
+        # Extract all bullets from Dogs Not Barking section
+        for line in gaps_section.splitlines():
             line_clean = line.replace("**", "").replace("*", "").strip().strip("-•* ").strip()
-            if _is_gap_line(line_clean):
+            # Include all non-empty lines (gaps and brainstorming)
+            if line_clean and len(line_clean) > 10:
                 gaps.append(line_clean)
     
-    # Take top 3 gaps
-    gaps = gaps[:3]
-    
-    # Fallback gaps if we don't have 3
-    fallback_gaps = [
-        "Most local firms lack weekend or evening availability, leaving potential clients underserved",
-        "Few competitors offer instant online booking or live chat, creating a convenience gap",
-        "Limited use of educational content (blogs, videos, guides) to build trust and expertise"
-    ]
-    
-    # Fill in with fallbacks if needed
-    while len(gaps) < 3:
-        gaps.append(fallback_gaps[len(gaps)])
-    
-    return gaps[:3]  # Always return exactly 3
+    # Return all gaps found (no failsafes - model must work)
+    return gaps
 
 def render_branded_email_html(report_md: str, subject: str, cta_url: Optional[str] = None, cta_label: str = "View Full Report") -> str:
     """Wrap the parsed markdown sections into the branded HTML template."""
@@ -712,7 +718,7 @@ def render_branded_email_html(report_md: str, subject: str, cta_url: Optional[st
             filtered_lines = all_lines[:5]  # Keep original if filtering would leave too few
         findings_section = "\n".join(filtered_lines) if filtered_lines else findings_section
     findings_html     = _md_to_html_paras(findings_section)
-    sources_html      = _format_sources_markdown(_section(report_md, "Sources"))
+    # Sources removed per user preference
     
     # Extract location from subject for gap analysis
     location = ""
@@ -723,7 +729,9 @@ def render_branded_email_html(report_md: str, subject: str, cta_url: Optional[st
     
     # Dogs Not Barking - market gaps
     gaps = _extract_market_gaps(report_md, location)
+    # No hardcoded brainstorming - LLM must generate industry-specific creative ideas via prompt
     gaps_html = "".join(
+        f"<li style='margin:0 0 10px 0;color:#374151;font-size:14px;line-height:1.6;'><em>{html.escape(gap)}</em></li>" if str(gap).lower().startswith("brainstorming:") else
         f"<li style='margin:0 0 10px 0;color:#374151;font-size:14px;line-height:1.6;'>{html.escape(gap)}</li>"
         for gap in gaps
     )
@@ -743,7 +751,7 @@ def render_branded_email_html(report_md: str, subject: str, cta_url: Optional[st
         exec_summary_html=exec_summary_html,
         findings_html=findings_html,
         gaps_html=gaps_html,
-        sources_html=sources_html,
+        
         year=year,
         **BRAND
     )
@@ -850,7 +858,7 @@ Tooling: call the send_email tool exactly once with subject, html_body.
 No chain-of-thought. US English.
 
 Example <li>:
-<li>Sales Call lapsed quotes — KPI: closes Target: +4 by 2025-11-18 (B:0, Src:CRM; Effort:M; Impact:H) [Season:year-end budgets, Lead:14d]</li>"""
+<li>Sales Call lapsed quotes — KPI: closes Target: +20% in 30 days (Effort:M; Impact:H) | HOW: 1) Review CRM for lapsed quotes 2) Create targeted email campaign 3) Follow up with phone calls | TOOLS: 1) HubSpot 2) Mailchimp 3) RingCentral</li>"""
 
 email_agent = Agent(
     name="Email agent",
