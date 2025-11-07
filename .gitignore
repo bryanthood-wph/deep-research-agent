@@ -3,3 +3,6 @@ __pycache__/
 node_modules/
 *.log
 .env
+*.zip
+*.plan.md
+.cursor/plans/
